@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "React Native: Android",
+        "program": "${workspaceFolder}/.vscode/launchReactNative.js",
+        "type": "reactnative",
+        "request": "launch",
+        "platform": "android",
+        "sourceMaps": true,
+        "outDir": "${workspaceFolder}/.vscode/.react"
+      }
+    ]
+  }
+  
