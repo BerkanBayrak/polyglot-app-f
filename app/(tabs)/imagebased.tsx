@@ -1,90 +1,156 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
-import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
-import { Colors, GlobalStyles } from '@/constants/Theme';
 import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
+import { Colors, GlobalStyles } from '@/constants/Theme';
+import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { getFlagImage } from '@/utils/helpers';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+
+type ImageQuestion = {
+  id: number;
+  image: { uri: string } | null;
+  question: string;
+  options: string[];
+  correct: string;
+  description: string;
+};
 
 export default function ImageBasedScreen() {
   const { sourceLang, targetLang } = useLanguage();
   const { user, loading } = useAuth();
   const router = useRouter();
   const layout = useResponsiveLayout();
+
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
+  const [imageQuestions, setImageQuestions] = useState<ImageQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Tüm hook'ları en üstte çağır
+  const { level, lang } = useLocalSearchParams();
+  const currentLevel = level || 1;
+  const currentLang = lang || 'trtoeng';
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!lang || !currentLevel || !user) return;
+
+      // now do fetch safely
+    }, 100); // wait 100ms
+
+    return () => clearTimeout(timer); // cleanup
+  }, [lang, currentLevel, user]);
+
+
+  useEffect(() => {
+    setLoadingQuestions(true);
+    fetch(`http://localhost:3001/api/image_questions/${Number(currentLevel)}?lang=${currentLang}`)
+      .then(res => res.json())
+      .then(data => {
+        const formatted = data.map(q => ({
+          id: q.id,
+          image: q.image_url ? { uri: q.image_url } : null,
+          question: q.question_text,
+          options: [q.option_a, q.option_b, q.option_c],
+          correct: q.correct_option,
+          description: ''
+        }));
+        setImageQuestions(formatted);
+        setCurrentQuestion(0);
+        setScore(0);
+        setSelectedAnswer(null);
+        setShowResult(false);
+        setLoadingQuestions(false);
+      })
+      .catch(err => {
+        console.error('❌ Failed to load image questions:', err);
+        setLoadingQuestions(false);
+      });
+  }, [currentLevel,lang]);
 
   useEffect(() => {
     if (!loading && !user && isMounted) {
       const timer = setTimeout(() => {
         router.replace('/');
       }, 100);
-
       return () => clearTimeout(timer);
     }
   }, [user, loading, isMounted, router]);
 
-  // Early returns - hook'lardan sonra
-  if (loading || !isMounted || !user) {
-    return null;
-  }
+  if (loading || !isMounted || !user) return null;
+  if (loadingQuestions) return <Text>Loading image questions...</Text>;
 
-  const imageQuestions = [
-    {
-      id: 1,
-      image: require('@/assets/images/icon.png'),
-      question: "What do you see in this image?",
-      options: ['Apple', 'Book', 'Cat'],
-      correct: 'Apple',
-      description: 'A red apple on a white background'
-    },
-    {
-      id: 2,
-      image: require('@/assets/images/icon.png'),
-      question: "What color is the object?",
-      options: ['Blue', 'Red', 'Green'],
-      correct: 'Red',
-      description: 'The apple has a bright red color'
-    },
-    {
-      id: 3,
-      image: require('@/assets/images/icon.png'),
-      question: "Where might you find this?",
-      options: ['Kitchen', 'Library', 'Park'],
-      correct: 'Kitchen',
-      description: 'Apples are commonly found in kitchens'
-    }
-  ];
-
-  const currentQ = imageQuestions[currentQuestion];
+  const currentQ: ImageQuestion | undefined = imageQuestions[currentQuestion];
+  if (!currentQ) return <Text>No question found.</Text>; // ✅ Prevent undefined crash
 
   const handleAnswerSelect = (answer: string) => {
     if (showResult) return;
     setSelectedAnswer(answer);
   };
 
-  const checkAnswer = () => {
+  const checkAnswer = async () => {
     if (!selectedAnswer) {
       Alert.alert('Please select an answer');
       return;
     }
 
     setShowResult(true);
-    if (selectedAnswer === currentQ.correct) {
-      setScore(score + 1);
+
+    const isCorrect = selectedAnswer === currentQ.correct;
+    const newScore = score + (isCorrect ? 1 : 0);
+    setScore(newScore);
+
+    const isLast = currentQuestion === imageQuestions.length - 1;
+    if (isLast) {
+      await submitProgress(newScore);
     }
   };
+
+  const submitProgress = async (finalScore: number) => {
+    const isCompleted = finalScore === imageQuestions.length;
+    
+
+    const progressPayload = {
+      user_id: user.id,
+      activity_type: 'image_based',
+      level: Number(currentLevel),
+      score: finalScore,
+      completed: isCompleted ? 1 : 0,
+      lang:currentLang
+    };
+    
+    try {
+      
+      const response = await fetch('http://localhost:3001/api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(progressPayload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unknown error');
+      }
+
+      console.log('✅ Progress submitted:', progressPayload); // TEMP log
+      Alert.alert('Progress Submitted', `Score: ${finalScore}`);
+    } catch (error) {
+      console.error('❌ Failed to save image progress:', error);
+      Alert.alert('Progress Failed', String(error));
+    }
+  };
+
 
   const nextQuestion = () => {
     if (currentQuestion < imageQuestions.length - 1) {
@@ -92,13 +158,13 @@ export default function ImageBasedScreen() {
       setSelectedAnswer(null);
       setShowResult(false);
     } else {
-      // Quiz completed
+      router.push(`/(tabs)/mainscreen?lang=${currentLang}`);
       Alert.alert(
-        'Visual Quiz Complete!',
-        `You scored ${score + (selectedAnswer === currentQ.correct ? 1 : 0)} out of ${imageQuestions.length}`,
+        'Exercise Complete',
+        `You scored ${score} out of ${imageQuestions.length}`,
         [
           { text: 'Try Again', onPress: resetQuiz },
-          { text: 'Continue Learning', onPress: () => router.push('/(tabs)/mainscreen') }
+          { text: 'Return', onPress: () => router.push('/(tabs)/mainscreen') }
         ]
       );
     }
@@ -110,6 +176,10 @@ export default function ImageBasedScreen() {
     setShowResult(false);
     setScore(0);
   };
+
+  
+
+
 
   const containerStyle = layout.isWeb ?
     ResponsiveStyles.webContainer :
@@ -137,7 +207,7 @@ export default function ImageBasedScreen() {
           ]}>
             <TouchableOpacity
               style={GlobalStyles.backButton}
-              onPress={() => router.push('/(tabs)/mainscreen')}
+              onPress={() => router.push(`/(tabs)/mainscreen?lang=${currentLang}`)}
             >
               <Ionicons name="arrow-back" size={24} color="#000" />
             </TouchableOpacity>
@@ -185,7 +255,8 @@ export default function ImageBasedScreen() {
               textAlign: 'center',
               marginBottom: 8
             }}>
-              LEVEL 2 - Visual Learning
+              LEVEL {currentLevel} - Visual Learning
+
             </Text>
             <Text style={{
               fontSize: 14,
@@ -223,17 +294,31 @@ export default function ImageBasedScreen() {
                 shadowRadius: 8,
                 elevation: 4
               }}>
-                <Image
-                  source={currentQ.image}
-                  style={{
-                    width: layout.isWeb ? 200 : 180,
-                    height: layout.isWeb ? 200 : 180,
-                    borderRadius: 12
-                  }}
-                  resizeMode="contain"
-                />
+                {currentQ.image?.uri ? (
+                  <Image
+                    source={{ uri: currentQ.image.uri }}
+                    style={{
+                      width: layout.isWeb ? 200 : 180,
+                      height: layout.isWeb ? 200 : 180,
+                      borderRadius: 12
+                    }}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: layout.isWeb ? 200 : 180,
+                      height: layout.isWeb ? 200 : 180,
+                      borderRadius: 12,
+                      backgroundColor: '#eeeeee',
+                      justifyContent: 'center',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Text style={{ color: '#999' }}>No image available</Text>
+                  </View>
+                )}
               </View>
-
               <View style={{
                 backgroundColor: '#e8f5e8',
                 paddingHorizontal: 16,

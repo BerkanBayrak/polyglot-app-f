@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Alert, ScrollView, ActivityIndicator } from 'react-native';
-import { Colors } from '@/constants/Theme';
 import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
-import { router } from 'expo-router';
+import { Colors } from '@/constants/Theme';
 import { useAuth } from '@/context/AuthContext';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import Checkbox from 'expo-checkbox';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -17,12 +17,7 @@ export default function LoginScreen() {
   const { login, user, loading: authLoading } = useAuth();
   const layout = useResponsiveLayout();
 
-  // Eğer kullanıcı zaten giriş yapmışsa yönlendir
-  useEffect(() => {
-    if (!authLoading && user) {
-      router.replace('/(tabs)/mainscreen');
-    }
-  }, [user, authLoading]);
+  
 
   // Auth loading state
   if (authLoading) {

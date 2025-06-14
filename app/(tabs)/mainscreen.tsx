@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, Image, ScrollView } from 'react-native';
-import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
-import { Colors, GlobalStyles } from '@/constants/Theme';
 import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
+import { Colors, GlobalStyles } from '@/constants/Theme';
+import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { getFlagImage } from '@/utils/helpers';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function MainScreen() {
   const { user, loading } = useAuth();
@@ -15,6 +15,9 @@ export default function MainScreen() {
   const layout = useResponsiveLayout();
   const { sourceLang, targetLang } = useLanguage();
   const [isMounted, setIsMounted] = useState(false);
+  const { lang } = useLocalSearchParams();
+  const currentLang = lang || `${sourceLang?.toLowerCase()}to${targetLang?.toLowerCase()}` || 'trtoeng';
+
 
   // Tüm hook'ları en üstte çağır
   useEffect(() => {
@@ -50,37 +53,38 @@ export default function MainScreen() {
       subtitle: 'Learn new words',
       icon: 'book-outline',
       color: '#FF6B6B',
-      route: '/(tabs)/vocabulary'
+      activityType: 'vocabulary'
     },
     {
       title: 'Grammar',
       subtitle: 'Master grammar rules',
       icon: 'library-outline',
       color: '#4ECDC4',
-      route: '/(tabs)/grammar'
+      activityType: 'grammar'
     },
     {
       title: 'Fill the Blanks',
       subtitle: 'Complete sentences',
       icon: 'create-outline',
       color: '#45B7D1',
-      route: '/(tabs)/filltheblanks'
+      activityType: 'filltheblanks'
     },
     {
       title: 'Image Based',
       subtitle: 'Visual learning',
       icon: 'image-outline',
       color: '#FFA726',
-      route: '/(tabs)/imagebased'
+      activityType: 'imagebased'
     },
     {
       title: 'Sentences',
       subtitle: 'Build sentences',
       icon: 'chatbubble-outline',
       color: '#AB47BC',
-      route: '/(tabs)/sentences'
+      activityType: 'sentences'
     }
   ];
+
 
   return (
     <View style={containerStyle}>
@@ -223,7 +227,10 @@ export default function MainScreen() {
                     borderWidth: 1,
                     borderColor: '#f0f0f0'
                   }}
-                  onPress={() => router.push(activity.route)}
+                  onPress={() => router.push(`/(tabs)/levels?activity=${activity.activityType}&lang=${currentLang}`)}
+
+
+
                 >
                   <View style={{
                     width: 50,

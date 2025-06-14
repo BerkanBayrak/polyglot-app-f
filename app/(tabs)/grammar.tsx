@@ -1,88 +1,137 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
-import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
-import { Colors, GlobalStyles } from '@/constants/Theme';
 import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
+import { Colors, GlobalStyles } from '@/constants/Theme';
+import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { getFlagImage } from '@/utils/helpers';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function GrammarScreen() {
   const { sourceLang, targetLang } = useLanguage();
   const { user, loading } = useAuth();
   const router = useRouter();
   const layout = useResponsiveLayout();
+
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
+  const [grammarQuestions, setGrammarQuestions] = useState<any[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Tüm hook'ları en üstte çağır
+  const { level, lang } = useLocalSearchParams();
+  const currentLevel = level || 1;
+  const currentLang = lang || 'trtoeng';
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!lang || !currentLevel || !user) return;
+
+      // now do fetch safely
+    }, 100); // wait 100ms
+
+    return () => clearTimeout(timer); // cleanup
+  }, [lang, currentLevel, user]);
+
+
+  useEffect(() => {
+    setLoadingQuestions(true);
+    fetch(`http://localhost:3001/api/grammar_questions/${Number(currentLevel)}?lang=${currentLang}`)
+      .then(res => res.json())
+      .then(data => {
+        const formatted = data.map(q => ({
+          id: q.id,
+          image: q.image_url ? { uri: q.image_url } : null,
+          question: q.question,
+          options: [q.option1, q.option2, q.option3],
+          correct: q.correct_answer,
+          explanation: q.explanation
+        }));
+        setGrammarQuestions(formatted);
+        setCurrentQuestion(0);
+        setScore(0);
+        setSelectedAnswer(null);
+        setShowResult(false);
+        setLoadingQuestions(false);
+      })
+      .catch(err => {
+        console.error('❌ Failed to load grammar questions:', err);
+        setLoadingQuestions(false);
+      });
+  }, [currentLevel,lang]);
 
   useEffect(() => {
     if (!loading && !user && isMounted) {
       const timer = setTimeout(() => {
         router.replace('/');
       }, 100);
-
       return () => clearTimeout(timer);
     }
   }, [user, loading, isMounted, router]);
 
-  // Early returns - hook'lardan sonra
-  if (loading || !isMounted || !user) {
-    return null;
-  }
-
-  const grammarQuestions = [
-    {
-      id: 1,
-      image: require('@/assets/images/icon.png'),
-      question: "The ball is _____ the table.",
-      options: ['under', 'on', 'in'],
-      correct: 'on',
-      explanation: "We use 'on' when something is placed on top of a surface."
-    },
-    {
-      id: 2,
-      image: require('@/assets/images/icon.png'),
-      question: "She _____ to school every day.",
-      options: ['go', 'goes', 'going'],
-      correct: 'goes',
-      explanation: "With third person singular (he/she/it), we add 's' to the verb."
-    },
-    {
-      id: 3,
-      image: require('@/assets/images/icon.png'),
-      question: "I _____ watching TV right now.",
-      options: ['am', 'is', 'are'],
-      correct: 'am',
-      explanation: "With 'I', we use 'am' for present continuous tense."
-    }
-  ];
+  if (loading || !isMounted || !user) return null;
+  if (loadingQuestions) return <Text>Loading grammar questions...</Text>;
 
   const currentQ = grammarQuestions[currentQuestion];
+  if (!currentQ) return <Text>No question found.</Text>;
 
   const handleAnswerSelect = (answer: string) => {
     if (showResult) return;
     setSelectedAnswer(answer);
   };
 
-  const checkAnswer = () => {
+  const checkAnswer = async () => {
     if (!selectedAnswer) {
       Alert.alert('Please select an answer');
       return;
     }
 
     setShowResult(true);
-    if (selectedAnswer === currentQ.correct) {
-      setScore(score + 1);
+
+    const isCorrect = selectedAnswer === currentQ.correct;
+    const newScore = score + (isCorrect ? 1 : 0);
+    setScore(newScore);
+
+    const isLast = currentQuestion === grammarQuestions.length - 1;
+    if (isLast) {
+      await submitProgress(newScore);
+    }
+  };
+
+  const submitProgress = async (finalScore: number) => {
+    const isCompleted = finalScore === grammarQuestions.length;
+
+    const progressPayload = {
+      user_id: user.id,
+      activity_type: 'grammar',
+      level: Number(currentLevel),
+      score: finalScore,
+      completed: isCompleted ? 1 : 0,
+      lang:currentLang
+    };
+
+    try {
+      const response = await fetch('http://localhost:3001/api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(progressPayload)
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unknown error');
+
+      Alert.alert('Progress Submitted', `Score: ${finalScore}`);
+    } catch (error) {
+      console.error('❌ Failed to save grammar progress:', error);
+      Alert.alert('Progress Failed', String(error));
     }
   };
 
@@ -92,13 +141,13 @@ export default function GrammarScreen() {
       setSelectedAnswer(null);
       setShowResult(false);
     } else {
-      // Quiz completed
+      router.push(`/(tabs)/mainscreen?lang=${currentLang}`);
       Alert.alert(
-        'Quiz Complete!',
-        `You scored ${score + (selectedAnswer === currentQ.correct ? 1 : 0)} out of ${grammarQuestions.length}`,
+        'Exercise Complete',
+        `You scored ${score} out of ${grammarQuestions.length}`,
         [
           { text: 'Try Again', onPress: resetQuiz },
-          { text: 'Continue Learning', onPress: () => router.push('/(tabs)/mainscreen') }
+          { text: 'Return', onPress: () => router.push('/(tabs)/mainscreen') }
         ]
       );
     }
@@ -110,6 +159,9 @@ export default function GrammarScreen() {
     setShowResult(false);
     setScore(0);
   };
+
+  
+
 
   const containerStyle = layout.isWeb ?
     ResponsiveStyles.webContainer :
@@ -137,7 +189,7 @@ export default function GrammarScreen() {
           ]}>
             <TouchableOpacity
               style={GlobalStyles.backButton}
-              onPress={() => router.push('/(tabs)/mainscreen')}
+              onPress={() => router.push(`/(tabs)/mainscreen?lang=${currentLang}`)}
             >
               <Ionicons name="arrow-back" size={24} color="#000" />
             </TouchableOpacity>
@@ -185,7 +237,7 @@ export default function GrammarScreen() {
               textAlign: 'center',
               marginBottom: 8
             }}>
-              LEVEL 2 - Grammar Rules
+              LEVEL {currentLevel} - Grammar Rules
             </Text>
             <Text style={{
               fontSize: 14,

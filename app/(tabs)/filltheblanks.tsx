@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
-import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
-import { Colors, GlobalStyles } from '@/constants/Theme';
 import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
+import { Colors, GlobalStyles } from '@/constants/Theme';
+import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { getFlagImage } from '@/utils/helpers';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+
 
 export default function FillTheBlanksScreen() {
   const { sourceLang, targetLang } = useLanguage();
@@ -19,6 +20,14 @@ export default function FillTheBlanksScreen() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
+  const [fillBlankQuestions, setFillBlankQuestions] = useState([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
+  const { level, lang } = useLocalSearchParams();
+  const currentLevel = level || 1; // default to 1 if not provided
+  const currentLang = lang || 'trtoeng';
+
+
+  
 
   // Tüm hook'ları en üstte çağır
   useEffect(() => {
@@ -26,46 +35,65 @@ export default function FillTheBlanksScreen() {
   }, []);
 
   useEffect(() => {
-    if (!loading && !user && isMounted) {
-      const timer = setTimeout(() => {
-        router.replace('/');
-      }, 100);
+    const timer = setTimeout(() => {
+      if (!lang || !currentLevel || !user) return;
 
-      return () => clearTimeout(timer);
-    }
-  }, [user, loading, isMounted, router]);
+      // now do fetch safely
+    }, 100); // wait 100ms
+
+    return () => clearTimeout(timer); // cleanup
+  }, [lang, currentLevel, user]);
+
+
+  useEffect(() => {
+  setLoadingQuestions(true); // reset loading state
+  fetch(`http://localhost:3001/api/fill-blank/${Number(currentLevel)}?lang=${currentLang}`)
+    .then(res => res.json())
+    .then(data => {
+      const formatted = data.map(q => ({
+        id: q.id,
+        level: q.level,
+        dialogue: [
+          {
+            speaker: 'A',
+            text: q.speaker_a_text,
+            blank: true,
+            options: [q.option1, q.option2, q.option3],
+            correct: q.correct_answer
+          },
+          {
+            speaker: 'B',
+            text: q.speaker_b_text,
+            blank: false
+          }
+        ],
+        explanation: q.explanation
+      }));
+      setFillBlankQuestions(formatted);
+      setCurrentQuestion(0); // reset question index when level changes
+      setScore(0);            // optional: reset score
+      setSelectedAnswer(null);
+      setShowResult(false);
+      setLoadingQuestions(false);
+    })
+    .catch(err => {
+      console.error('Failed to load questions:', err);
+      setLoadingQuestions(false);
+    });
+  }, [currentLevel,lang]); 
+
+
 
   // Early returns - hook'lardan sonra
   if (loading || !isMounted || !user) {
     return null;
   }
+  if (loadingQuestions) {
+  return <Text>Loading questions...</Text>;
+ }
 
-  const fillBlankQuestions = [
-    {
-      id: 1,
-      dialogue: [
-        { speaker: 'A', text: 'How _____ you?', blank: true, options: ['are', 'is', 'has'], correct: 'are' },
-        { speaker: 'B', text: 'I am fine, thank you.', blank: false }
-      ],
-      explanation: "We use 'are' with 'you' in questions and statements."
-    },
-    {
-      id: 2,
-      dialogue: [
-        { speaker: 'A', text: 'What _____ your name?', blank: true, options: ['is', 'are', 'am'], correct: 'is' },
-        { speaker: 'B', text: 'My name is Sarah.', blank: false }
-      ],
-      explanation: "We use 'is' with singular nouns like 'name'."
-    },
-    {
-      id: 3,
-      dialogue: [
-        { speaker: 'A', text: 'Where _____ you from?', blank: true, options: ['are', 'is', 'do'], correct: 'are' },
-        { speaker: 'B', text: 'I am from Turkey.', blank: false }
-      ],
-      explanation: "We use 'are' with 'you' when asking about origin or location."
-    }
-  ];
+
+  
 
   const currentQ = fillBlankQuestions[currentQuestion];
   const blankLine = currentQ.dialogue.find(line => line.blank);
@@ -75,17 +103,48 @@ export default function FillTheBlanksScreen() {
     setSelectedAnswer(answer);
   };
 
-  const checkAnswer = () => {
+ const checkAnswer = async () => {
     if (!selectedAnswer) {
       Alert.alert('Please select an answer');
       return;
     }
 
     setShowResult(true);
-    if (selectedAnswer === blankLine?.correct) {
-      setScore(score + 1);
+
+    const isCorrect = selectedAnswer === blankLine?.correct;
+    const newScore = score + (isCorrect ? 1 : 0);
+    setScore(newScore);
+
+    // ✅ Only update progress if it's the final question
+    const isLast = currentQuestion === fillBlankQuestions.length - 1;
+    if (isLast) {
+      await submitProgress(newScore);
+      
     }
   };
+
+  const submitProgress = async (finalScore: number) => {
+    const isCompleted = finalScore === fillBlankQuestions.length;
+
+    try {
+      await fetch('http://localhost:3001/api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          activity_type: 'fill_in_blank',
+          level: Number(currentLevel),
+          score: finalScore,
+          completed: isCompleted ? 1 : 0, // important: DB expects number
+          lang:currentLang
+          
+        })
+      });
+    } catch (error) {
+      console.error('❌ Failed to save progress:', error);
+    }
+  };
+
 
   const nextQuestion = () => {
     if (currentQuestion < fillBlankQuestions.length - 1) {
@@ -93,10 +152,10 @@ export default function FillTheBlanksScreen() {
       setSelectedAnswer(null);
       setShowResult(false);
     } else {
-      // Quiz completed
+      router.push(`/(tabs)/mainscreen?lang=${currentLang}`);
       Alert.alert(
         'Exercise Complete!',
-        `You scored ${score + (selectedAnswer === blankLine?.correct ? 1 : 0)} out of ${fillBlankQuestions.length}`,
+        `You scored ${score} out of ${fillBlankQuestions.length}`,
         [
           { text: 'Try Again', onPress: resetQuiz },
           { text: 'Continue Learning', onPress: () => router.push('/(tabs)/mainscreen') }
@@ -104,6 +163,9 @@ export default function FillTheBlanksScreen() {
       );
     }
   };
+
+
+
 
   const resetQuiz = () => {
     setCurrentQuestion(0);
@@ -138,7 +200,7 @@ export default function FillTheBlanksScreen() {
           ]}>
             <TouchableOpacity
               style={GlobalStyles.backButton}
-              onPress={() => router.push('/(tabs)/mainscreen')}
+              onPress={() => router.push(`/(tabs)/mainscreen?lang=${currentLang}`)}
             >
               <Ionicons name="arrow-back" size={24} color="#000" />
             </TouchableOpacity>
@@ -186,7 +248,7 @@ export default function FillTheBlanksScreen() {
               textAlign: 'center',
               marginBottom: 8
             }}>
-              LEVEL 8 - Complete the Dialogue
+              LEVEL {fillBlankQuestions[0]?.level || currentLevel} - Complete the Dialogue
             </Text>
             <Text style={{
               fontSize: 14,

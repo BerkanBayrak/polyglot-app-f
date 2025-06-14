@@ -1,13 +1,13 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Dimensions } from 'react-native';
-import { Colors, GlobalStyles } from '@/constants/Theme';
 import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
-import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
-import { useLanguage } from '@/context/LanguageContext';
+import { Colors, GlobalStyles } from '@/constants/Theme';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { getFlagImage } from '@/utils/helpers';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import React from 'react';
+import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function LanguageSelectionScreen() {
     const router = useRouter();
@@ -16,9 +16,11 @@ export default function LanguageSelectionScreen() {
     const layout = useResponsiveLayout();
 
     const handleLanguageSelect = (sourceLang: string, targetLang: string) => {
+        const langPair = `${sourceLang}to${targetLang}`;
         setLanguages(sourceLang, targetLang);
-        router.replace('/(tabs)/mainscreen');
-    }
+        router.replace(`/(tabs)/mainscreen?lang=${langPair}`);
+    };
+
 
     const containerStyle = layout.isWeb ?
         ResponsiveStyles.webContainer :

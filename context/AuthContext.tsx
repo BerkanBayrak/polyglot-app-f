@@ -1,8 +1,9 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
 interface User {
+  id:number
   email: string;
   uid?: string;
   name?: string;
@@ -49,48 +50,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await fetch('http://localhost:3001/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
 
-      // Mock successful login - replace with real API
-      if (email && password) {
-        const newUser = { email };
-        setUser(newUser);
-
-        // Real app'te burada token'ı storage'a kaydet
-        // localStorage.setItem('authToken', 'token_here');
-      } else {
-        throw new Error('Invalid credentials');
+      if (!response.ok) {
+        const { error } = await response.json();
+        throw new Error(error || 'Login failed');
       }
+
+      const userData = await response.json(); // { id, name, email }
+      setUser(userData);
     } catch (error) {
       throw error;
     } finally {
       setLoading(false);
     }
   };
+
+
 
   const register = async (email: string, password: string, name: string) => {
     setLoading(true);
     try {
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Mock successful registration
-      if (email && password && name) {
-        const newUser = { email, name };
-        setUser(newUser);
+      const response = await fetch('http://localhost:3001/api/sync-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
 
-        // Real app'te burada token'ı storage'a kaydet
-        // localStorage.setItem('authToken', 'token_here');
-      } else {
-        throw new Error('Registration failed');
-      }
+      const syncedUser = await response.json();
+      setUser(syncedUser);
     } catch (error) {
       throw error;
     } finally {
       setLoading(false);
     }
   };
+
 
   const logout = async () => {
     setLoading(true);

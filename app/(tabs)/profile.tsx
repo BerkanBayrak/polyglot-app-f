@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
+import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
+import { Colors, GlobalStyles } from '@/constants/Theme';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
-import { Colors, GlobalStyles } from '@/constants/Theme';
-import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function ProfileScreen() {
     const { user, loading } = useAuth();
@@ -19,14 +19,36 @@ export default function ProfileScreen() {
     const [isMounted, setIsMounted] = useState(false);
 
     // Mock user stats - in real app, this would come from API
-    const [userStats] = useState({
-        lessonsCompleted: 24,
-        wordsLearned: 156,
-        dayStreak: 7,
-        totalXP: 1240,
-        level: 3,
-        joinDate: new Date().toLocaleDateString()
+    const [userStats, setUserStats] = useState({
+        lessonsCompleted: 0,
+        wordsLearned: 0,
+        totalXP: 0,
+        firstLesson: false,
+        wordMaster: false,
+        dayStreak: 0,
     });
+
+    useEffect(() => {
+        const fetchUserStats = async () => {
+            try {
+            const response = await fetch(`http://localhost:3001/api/user-stats/${user?.id}`);
+            const data = await response.json();
+            setUserStats({
+                ...data,
+                dayStreak: data.dayStreak ?? 0 // ✅ Default to 0 if undefined
+            });
+            } catch (error) {
+            console.error('Error fetching user stats:', error);
+            }
+        };
+
+        if (user?.id) {
+            fetchUserStats();
+        }
+    }, [user?.id]);
+
+
+
 
     // Tüm hook'ları en üstte çağır
     useEffect(() => {

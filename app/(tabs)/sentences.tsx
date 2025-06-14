@@ -1,94 +1,165 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
-import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
-import { Colors, GlobalStyles } from '@/constants/Theme';
 import { ResponsiveStyles } from '@/constants/ResponsiveTheme';
+import { Colors, GlobalStyles } from '@/constants/Theme';
+import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { getFlagImage } from '@/utils/helpers';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function SentencesScreen() {
   const { sourceLang, targetLang } = useLanguage();
   const { user, loading } = useAuth();
   const router = useRouter();
   const layout = useResponsiveLayout();
+  const { level, lang } = useLocalSearchParams();
+
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [availableWords, setAvailableWords] = useState<string[]>([]);
   const [showResult, setShowResult] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
+  const [sentenceQuestions, setSentenceQuestions] = useState<any[]>([]);
 
-  const sentenceQuestions = [
-    {
-      id: 1,
-      target: "What is your name?",
-      words: ["What", "is", "your", "name", "?"],
-      scrambled: ["name", "What", "your", "is", "?"],
-      hint: "A question asking for someone's identity"
-    },
-    {
-      id: 2,
-      target: "I am learning English.",
-      words: ["I", "am", "learning", "English", "."],
-      scrambled: ["learning", "am", "English", "I", "."],
-      hint: "A statement about studying a language"
-    },
-    {
-      id: 3,
-      target: "The book is on the table.",
-      words: ["The", "book", "is", "on", "the", "table", "."],
-      scrambled: ["table", "book", "on", "The", "is", "the", "."],
-      hint: "Describing the location of an object"
-    }
-  ];
+  const layoutLevel = parseInt(typeof level === 'string' ? level : '1');
+  const currentLang = lang || 'trtoeng';
 
-  const currentQ = sentenceQuestions[currentQuestion];
-
-  // Tüm hook'ları en üstte çağır
+  // Show when the component is mounted
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!loading && !user && isMounted) {
+    const timer = setTimeout(() => {
+      if (!lang || !layoutLevel || !user) return;
+
+      // now do fetch safely
+    }, 100); // wait 100ms
+
+    return () => clearTimeout(timer); // cleanup
+  }, [lang, layoutLevel, user]);
+
+
+  // Log auth state to debug
+  useEffect(() => {
+    console.log('🔍 useEffect Auth Check', { loading, user, isMounted });
+    if (loading) return; // wait for auth to finish
+
+    if (!user && isMounted) {
+      console.log('🚪 Redirecting: user not found');
       const timer = setTimeout(() => {
         router.replace('/');
       }, 100);
-
       return () => clearTimeout(timer);
     }
   }, [user, loading, isMounted, router]);
 
-  // Initialize available words when question changes - dependency array'e currentQ eklendi
+  // Fetch sentence questions
   useEffect(() => {
-    if (currentQ) {
+    if (user && layoutLevel && lang) {
+      console.log("Fetching with lang:", lang);
+
+      fetch(`http://localhost:3001/api/sentences/${layoutLevel}?lang=${currentLang}`)
+        .then(res => res.json())
+        .then(data => {
+          const formatted = data.map((q: any) => ({
+            id: q.id,
+            target: q.target,
+            hint: q.hint,
+            words: q.target.trim().split(' '),
+            scrambled: shuffleArray(q.target.trim().split(' '))
+          }));
+          setSentenceQuestions(formatted);
+          setCurrentQuestion(0);
+          setScore(0);
+          setShowResult(false);
+        })
+        .catch(err => {
+          console.error('❌ Failed to load sentence questions:', err);
+        });
+    }
+  }, [user, layoutLevel, lang]);
+
+
+
+  // Initialize question
+  useEffect(() => {
+    if (sentenceQuestions.length > 0 && sentenceQuestions[currentQuestion]) {
+      const currentQ = sentenceQuestions[currentQuestion];
       setAvailableWords([...currentQ.scrambled]);
       setSelectedWords([]);
       setShowResult(false);
     }
-  }, [currentQuestion]); // currentQ yerine currentQuestion kullanıyoruz
+  }, [currentQuestion, sentenceQuestions]);
 
+  // Shuffle helper
+  const shuffleArray = (array: string[]) => {
+    return [...array].sort(() => Math.random() - 0.5);
+  };
+
+  // ✅ DEBUG: Final check before rendering
+  console.log('🧠 Render check:', { loading, user, isMounted, questions: sentenceQuestions.length });
+
+  // Early return if something isn't ready
+  if (!isMounted) {
+    return <Text style={{ color: 'white' }}>Component not mounted yet</Text>;
+  }
+  if (loading) {
+    return <Text style={{ color: 'white' }}>Loading user data...</Text>;
+  }
+  if (!user) {
+    return <Text style={{ color: 'white' }}>Please log in to continue</Text>;
+  }
+
+
+  if (!isMounted) {
+    return <Text style={{ color: 'white' }}>Component not mounted yet</Text>;
+  }
+  if (loading) {
+    return <Text style={{ color: 'white' }}>Loading user data...</Text>;
+  }
+  if (!user) {
+    return <Text style={{ color: 'white' }}>Please log in to continue</Text>;
+  }
+  if (sentenceQuestions.length === 0) {
+    return <Text style={{ color: 'white' }}>No sentence questions found for this level.</Text>;
+  }
+
+  const currentQ = sentenceQuestions[currentQuestion]; // ✅ SAFE to access now
+
+
+
+  
   // Early returns - hook'lardan sonra
   if (loading || !isMounted || !user) {
-    return null;
+      return null;
   }
 
   const handleWordSelect = (word: string, fromAvailable: boolean) => {
-    if (showResult) return;
+      if (showResult) return;
 
-    if (fromAvailable) {
-      // Move word from available to selected
-      setAvailableWords(prev => prev.filter((w, i) => prev.indexOf(word) !== i || prev.slice(0, i).includes(word)));
-      setSelectedWords(prev => [...prev, word]);
-    } else {
-      // Move word from selected back to available
-      const wordIndex = selectedWords.indexOf(word);
-      setSelectedWords(prev => prev.filter((_, i) => i !== wordIndex));
-      setAvailableWords(prev => [...prev, word]);
-    }
+      if (fromAvailable) {
+        // Remove first occurrence of the word from availableWords
+        const index = availableWords.indexOf(word);
+        if (index !== -1) {
+          const updatedAvailable = [...availableWords];
+          updatedAvailable.splice(index, 1);
+          setAvailableWords(updatedAvailable);
+          setSelectedWords(prev => [...prev, word]);
+        }
+      } else {
+        // Move back to availableWords
+        const index = selectedWords.indexOf(word);
+        if (index !== -1) {
+          const updatedSelected = [...selectedWords];
+          updatedSelected.splice(index, 1);
+          setSelectedWords(updatedSelected);
+          setAvailableWords(prev => [...prev, word]);
+        }
+      }
   };
 
   const checkSentence = () => {
@@ -97,33 +168,56 @@ export default function SentencesScreen() {
       return;
     }
 
-    const userSentence = selectedWords.join(' ');
-    const correctSentence = currentQ.target;
+    const userSentence = selectedWords.join(' ').trim();
+    const correctSentence = currentQ.target.trim();
 
     setShowResult(true);
-
     if (userSentence === correctSentence) {
-      setScore(score + 1);
+      setScore(prev => prev + 1);
     }
   };
 
-  const nextQuestion = () => {
+  const submitProgress = async (finalScore: number) => {
+    try {
+      await fetch('http://localhost:3001/api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          activity_type: 'sentences',
+          level: layoutLevel,
+          score: finalScore,
+          completed: finalScore === sentenceQuestions.length ? 1 : 0,
+          lang:currentLang
+        })
+      });
+    } catch (err) {
+      console.error('Failed to submit progress:', err);
+    }
+  };
+
+  const nextQuestion = async () => {
+    const userSentence = selectedWords.join(' ').trim();
+    const correct = userSentence === currentQ.target.trim();
+    const finalScore = score;
+
     if (currentQuestion < sentenceQuestions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-      setScore(score);
+      setCurrentQuestion(prev => prev + 1);
+      setScore(finalScore);
     } else {
-      // Quiz completed
-      const finalScore = score + (selectedWords.join(' ') === currentQ.target ? 1 : 0);
+      await submitProgress(finalScore); 
+      router.push(`/(tabs)/mainscreen?lang=${currentLang}`);
       Alert.alert(
         'Sentence Building Complete!',
         `You scored ${finalScore} out of ${sentenceQuestions.length}`,
         [
           { text: 'Try Again', onPress: resetQuiz },
-          { text: 'Continue Learning', onPress: () => router.push('/(tabs)/mainscreen') }
+          { text: 'Main Menu', onPress: () => router.push('/(tabs)/mainscreen') }
         ]
       );
     }
   };
+
 
   const resetQuiz = () => {
     setCurrentQuestion(0);
@@ -136,6 +230,10 @@ export default function SentencesScreen() {
     setSelectedWords([]);
   };
 
+  const userSentence = selectedWords.join(' ');
+  const isCorrect = userSentence.trim() === currentQ.target.trim();
+
+
   const containerStyle = layout.isWeb ?
     ResponsiveStyles.webContainer :
     GlobalStyles.container;
@@ -144,8 +242,6 @@ export default function SentencesScreen() {
     { ...ResponsiveStyles.webCard, minHeight: '90vh' } :
     GlobalStyles.whiteBackgroundContainer;
 
-  const userSentence = selectedWords.join(' ');
-  const isCorrect = userSentence === currentQ.target;
 
   return (
     <View style={containerStyle}>
@@ -165,7 +261,7 @@ export default function SentencesScreen() {
           ]}>
             <TouchableOpacity
               style={GlobalStyles.backButton}
-              onPress={() => router.push('/(tabs)/mainscreen')}
+              onPress={() => router.push(`/(tabs)/mainscreen?lang=${currentLang}`)}
             >
               <Ionicons name="arrow-back" size={24} color="#000" />
             </TouchableOpacity>
@@ -213,7 +309,7 @@ export default function SentencesScreen() {
               textAlign: 'center',
               marginBottom: 8
             }}>
-              LEVEL 1 - Build Sentences
+              LEVEL {layoutLevel} - Build Sentences
             </Text>
             <Text style={{
               fontSize: 14,
