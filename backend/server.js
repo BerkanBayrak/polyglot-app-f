@@ -7,11 +7,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ✅ Cloud SQL Unix socket connection
 const db = mysql.createConnection({
-  host: '34.32.89.246',
-  user: 'berkan',
+  user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  database: 'polyglotpal'
+  database: process.env.DB_NAME,
+  socketPath: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`
 });
 
 // LOGIN
@@ -60,7 +61,6 @@ app.get('/api/fill-blank/:level', (req, res) => {
 app.get('/api/vocabulary/:level', (req, res) => {
   const level = parseInt(req.params.level);
   const lang = req.query.lang || 'trtoeng';
-
   db.query(
     'SELECT * FROM vocabulary_questions WHERE level = ? AND lang = ?',
     [level, lang],
@@ -75,7 +75,6 @@ app.get('/api/vocabulary/:level', (req, res) => {
 app.get('/api/sentences/:level', (req, res) => {
   const level = parseInt(req.params.level);
   const lang = req.query.lang || 'trtoeng';
-
   db.query(
     'SELECT * FROM sentences_questions WHERE level = ? AND lang = ? ORDER BY id',
     [level, lang],
@@ -90,7 +89,6 @@ app.get('/api/sentences/:level', (req, res) => {
 app.get('/api/image_questions/:level', (req, res) => {
   const level = parseInt(req.params.level);
   const lang = req.query.lang || 'trtoeng';
-
   db.query(
     'SELECT * FROM image_questions WHERE level = ? AND lang = ?',
     [level, lang],
@@ -105,7 +103,6 @@ app.get('/api/image_questions/:level', (req, res) => {
 app.get('/api/grammar_questions/:level', (req, res) => {
   const level = parseInt(req.params.level);
   const lang = req.query.lang || 'trtoeng';
-
   if (isNaN(level)) return res.status(400).json({ error: 'Invalid level' });
 
   db.query(
@@ -142,7 +139,6 @@ app.post('/api/progress', (req, res) => {
 app.get('/api/progress/:user_id/:activity_type', (req, res) => {
   const { user_id, activity_type } = req.params;
   const lang = req.query.lang;
-
   if (!lang) return res.status(400).json({ error: 'Missing language parameter' });
 
   const query = `
@@ -157,7 +153,6 @@ app.get('/api/progress/:user_id/:activity_type', (req, res) => {
     res.json(results);
   });
 });
-
 
 // USER STATS
 app.get('/api/user-stats/:user_id', (req, res) => {
@@ -177,6 +172,8 @@ app.get('/api/user-stats/:user_id', (req, res) => {
   });
 });
 
-app.listen(3001, () => {
-  console.log('✅ Backend running at http://localhost:3001');
+// ✅ Use correct port for Cloud Run
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`✅ Backend running on port ${PORT}`);
 });

@@ -31,7 +31,7 @@ export default function ProfileScreen() {
     useEffect(() => {
         const fetchUserStats = async () => {
             try {
-            const response = await fetch(`http://localhost:3001/api/user-stats/${user?.id}`);
+            const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/user-stats/${user?.id}`);
             const data = await response.json();
             setUserStats({
                 ...data,

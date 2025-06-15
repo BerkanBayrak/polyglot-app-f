@@ -54,7 +54,7 @@ export default function ImageBasedScreen() {
 
   useEffect(() => {
     setLoadingQuestions(true);
-    fetch(`http://localhost:3001/api/image_questions/${Number(currentLevel)}?lang=${currentLang}`)
+    fetch(`${process.env.EXPO_PUBLIC_API_URL}/image_questions/${Number(currentLevel)}?lang=${currentLang}`)
       .then(res => res.json())
       .then(data => {
         const formatted = data.map(q => ({
@@ -131,7 +131,7 @@ export default function ImageBasedScreen() {
     
     try {
       
-      const response = await fetch('http://localhost:3001/api/progress', {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(progressPayload)

@@ -47,7 +47,7 @@ export default function FillTheBlanksScreen() {
 
   useEffect(() => {
   setLoadingQuestions(true); // reset loading state
-  fetch(`http://localhost:3001/api/fill-blank/${Number(currentLevel)}?lang=${currentLang}`)
+  fetch(`${process.env.EXPO_PUBLIC_API_URL}/fill-blank/${Number(currentLevel)}?lang=${currentLang}`)
     .then(res => res.json())
     .then(data => {
       const formatted = data.map(q => ({
@@ -127,7 +127,7 @@ export default function FillTheBlanksScreen() {
     const isCompleted = finalScore === fillBlankQuestions.length;
 
     try {
-      await fetch('http://localhost:3001/api/progress', {
+      await fetch(`${process.env.EXPO_PUBLIC_API_URL}/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

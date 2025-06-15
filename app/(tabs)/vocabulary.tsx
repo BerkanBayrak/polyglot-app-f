@@ -49,7 +49,7 @@ export default function VocabularyScreen() {
 
 
   useEffect(() => {
-    fetch(`http://localhost:3001/api/vocabulary/${numericLevel}?lang=${currentLang}`)
+    fetch(`${process.env.EXPO_PUBLIC_API_URL}/vocabulary/${numericLevel}?lang=${currentLang}`)
       .then(res => res.json())
       .then(data => {
         const grouped = Object.values(
@@ -104,7 +104,7 @@ export default function VocabularyScreen() {
 
   const submitProgress = async () => {
     try {
-      await fetch('http://localhost:3001/api/progress', {
+      await fetch(`${process.env.EXPO_PUBLIC_API_URL}/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

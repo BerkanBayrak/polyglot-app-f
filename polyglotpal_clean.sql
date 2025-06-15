@@ -3,6 +3,11 @@
 -- Host: localhost    Database: polyglotpal
 -- ------------------------------------------------------
 -- Server version	8.0.42
+-- Server version	8.0.42
+
+CREATE DATABASE IF NOT EXISTS polyglotpal;
+USE polyglotpal;
+
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;

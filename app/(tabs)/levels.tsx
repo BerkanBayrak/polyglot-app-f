@@ -59,7 +59,7 @@ export default function LevelSelectionScreen() {
       
 
 
-      fetch(`http://localhost:3001/api/progress/${user.id}/${dbActivityType}?lang=${lang}`)
+      fetch(`${process.env.EXPO_PUBLIC_API_URL}/progress/${user.id}/${dbActivityType}?lang=${lang}`)
 
 
         .then(res => res.json())

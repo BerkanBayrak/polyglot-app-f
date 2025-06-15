@@ -62,7 +62,7 @@ export default function SentencesScreen() {
     if (user && layoutLevel && lang) {
       console.log("Fetching with lang:", lang);
 
-      fetch(`http://localhost:3001/api/sentences/${layoutLevel}?lang=${currentLang}`)
+      fetch(`${process.env.EXPO_PUBLIC_API_URL}/sentences/${layoutLevel}?lang=${currentLang}`)
         .then(res => res.json())
         .then(data => {
           const formatted = data.map((q: any) => ({
@@ -179,7 +179,7 @@ export default function SentencesScreen() {
 
   const submitProgress = async (finalScore: number) => {
     try {
-      await fetch('http://localhost:3001/api/progress', {
+      await fetch(`${process.env.EXPO_PUBLIC_API_URL}/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
